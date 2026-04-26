@@ -1,5 +1,5 @@
 // Home Screen - shows monthly summary and recent expenses
-// budget is loaded from SharedPreferences (set in Settings screen)
+// reads currency and budget from SharedPreferences set in Settings
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -19,6 +19,7 @@ class _HomeScreenState extends State<HomeScreen> {
   double _monthlyTotal = 0;
   double _budget = 8000;
   String _userName = '';
+  String _currency = 'TRY'; // loaded from settings
 
   @override
   void initState() {
@@ -26,11 +27,11 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadData();
   }
 
-  // load both expenses and user settings from storage
   Future<void> _loadData() async {
     final prefs = await SharedPreferences.getInstance();
     final budget = prefs.getDouble('monthly_budget') ?? 8000;
     final name = prefs.getString('user_name') ?? '';
+    final currency = prefs.getString('currency') ?? 'TRY';
 
     final yearMonth = DateFormat('yyyy-MM').format(DateTime.now());
     final monthly = await DBHelper.instance.getMonthlyExpenses(yearMonth);
@@ -46,12 +47,27 @@ class _HomeScreenState extends State<HomeScreen> {
       _monthlyTotal = total;
       _budget = budget;
       _userName = name;
+      _currency = currency;
     });
   }
 
   Future<void> _deleteExpense(int id) async {
     await DBHelper.instance.deleteExpense(id);
     _loadData();
+  }
+
+  // return currency symbol based on code
+  String _symbol(String currency) {
+    switch (currency) {
+      case 'EUR': return '€';
+      case 'RON': return 'lei ';
+      case 'USD': return '\$';
+      case 'GBP': return '£';
+      case 'CZK': return 'Kč ';
+      case 'HUF': return 'Ft ';
+      case 'PLN': return 'zł ';
+      default: return '₺';
+    }
   }
 
   IconData _categoryIcon(String category) {
@@ -80,6 +96,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final progress = (_monthlyTotal / _budget).clamp(0.0, 1.0);
     final remaining = _budget - _monthlyTotal;
+    final sym = _symbol(_currency);
 
     return Scaffold(
       backgroundColor: const Color(0xFFFAFAF8),
@@ -95,7 +112,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 title: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // show greeting with name if set in settings
                     if (_userName.isNotEmpty)
                       Text(
                         'Hi, $_userName 👋',
@@ -129,7 +145,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
 
-                    // monthly summary card
+                    // summary card with dynamic currency symbol
                     Container(
                       padding: const EdgeInsets.all(18),
                       decoration: BoxDecoration(
@@ -148,18 +164,13 @@ class _HomeScreenState extends State<HomeScreen> {
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               Text(
-                                NumberFormat('#,##0.00').format(_monthlyTotal),
+                                '$sym${NumberFormat('#,##0.00').format(_monthlyTotal)}',
                                 style: const TextStyle(
                                   fontSize: 28,
                                   fontWeight: FontWeight.w600,
                                   color: Color(0xFF2D4A35),
                                   letterSpacing: -1,
                                 ),
-                              ),
-                              const SizedBox(width: 6),
-                              const Padding(
-                                padding: EdgeInsets.only(bottom: 4),
-                                child: Text('₺', style: TextStyle(fontSize: 16, color: Color(0xFF5C7A62))),
                               ),
                             ],
                           ),
@@ -182,11 +193,11 @@ class _HomeScreenState extends State<HomeScreen> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
-                                'Budget: ₺${NumberFormat('#,##0').format(_budget)}',
+                                'Budget: $sym${NumberFormat('#,##0').format(_budget)}',
                                 style: const TextStyle(fontSize: 11, color: Color(0xFF5C7A62)),
                               ),
                               Text(
-                                'Left: ₺${NumberFormat('#,##0').format(remaining)}',
+                                'Left: $sym${NumberFormat('#,##0').format(remaining)}',
                                 style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w500,
@@ -233,7 +244,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       )
                     else
                       ...(_expenses.map((expense) => Dismissible(
-                        // swipe left to delete expense
                         key: Key(expense.id.toString()),
                         direction: DismissDirection.endToStart,
                         background: Container(
@@ -289,8 +299,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                   ],
                                 ),
                               ),
+                              // show amount with currency from expense record
                               Text(
-                                '-₺${NumberFormat('#,##0.00').format(expense.amount)}',
+                                '-${_symbol(expense.currency)}${NumberFormat('#,##0.00').format(expense.amount)}',
                                 style: const TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,

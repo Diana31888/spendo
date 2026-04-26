@@ -26,16 +26,17 @@ class DBHelper {
 
   // creates the expenses table the first time the app runs
   Future _createDB(Database db, int version) async {
-    await db.execute('''
-      CREATE TABLE expenses (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        title TEXT NOT NULL,
-        amount REAL NOT NULL,
-        category TEXT NOT NULL,
-        date TEXT NOT NULL
-      )
-    ''');
-  }
+  await db.execute('''
+    CREATE TABLE expenses (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      amount REAL NOT NULL,
+      category TEXT NOT NULL,
+      date TEXT NOT NULL,
+      currency TEXT NOT NULL DEFAULT 'TRY'
+    )
+  ''');
+}
 
   // INSERT - save a new expense to the database
   Future<int> insertExpense(Expense expense) async {

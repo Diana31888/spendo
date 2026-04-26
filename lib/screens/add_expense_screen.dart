@@ -1,6 +1,7 @@
 // Add Expense Screen - form to add a new expense to the database
-// user fills in amount, description, category and date
+// default currency is loaded from Settings (SharedPreferences)
 
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../database/db_helper.dart';
@@ -18,6 +19,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   final _amountController = TextEditingController();
   String _selectedCategory = 'Food';
   DateTime _selectedDate = DateTime.now();
+  String _selectedCurrency = 'TRY'; // will be updated from Settings
 
   final List<Map<String, dynamic>> _categories = [
     {'name': 'Food', 'icon': Icons.restaurant_outlined},
@@ -28,7 +30,34 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     {'name': 'Other', 'icon': Icons.receipt_outlined},
   ];
 
-  // open date picker and update selected date
+  @override
+  void initState() {
+    super.initState();
+    _loadDefaultCurrency();
+  }
+
+  // load currency from Settings so the form starts with the right currency
+  Future<void> _loadDefaultCurrency() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _selectedCurrency = prefs.getString('currency') ?? 'TRY';
+    });
+  }
+
+  // return symbol for currency code
+  String _symbol(String currency) {
+    switch (currency) {
+      case 'EUR': return '€';
+      case 'RON': return 'lei';
+      case 'USD': return '\$';
+      case 'GBP': return '£';
+      case 'CZK': return 'Kč';
+      case 'HUF': return 'Ft';
+      case 'PLN': return 'zł';
+      default: return '₺';
+    }
+  }
+
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
       context: context,
@@ -49,12 +78,10 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     }
   }
 
-  // validate inputs and save expense to database
   Future<void> _saveExpense() async {
     final title = _titleController.text.trim();
     final amountText = _amountController.text.trim();
 
-    // basic validation before saving
     if (title.isEmpty || amountText.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -76,17 +103,17 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       return;
     }
 
-    // create expense object and insert into database
+    // save expense with the selected currency
     final expense = Expense(
       title: title,
       amount: amount,
       category: _selectedCategory,
       date: DateFormat('yyyy-MM-dd').format(_selectedDate),
+      currency: _selectedCurrency,
     );
 
     await DBHelper.instance.insertExpense(expense);
 
-    // clear the form after saving
     _titleController.clear();
     _amountController.clear();
     setState(() {
@@ -106,7 +133,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
 
   @override
   void dispose() {
-    // always dispose controllers to free memory
     _titleController.dispose();
     _amountController.dispose();
     super.dispose();
@@ -122,7 +148,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-
               const SizedBox(height: 10),
               const Text(
                 'New expense',
@@ -135,32 +160,68 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               ),
               const SizedBox(height: 24),
 
-              // amount field
-              const Text('Amount (₺)', style: TextStyle(fontSize: 13, color: Color(0xFF777777))),
+              // amount + currency picker on same row
+              const Text('Amount', style: TextStyle(fontSize: 13, color: Color(0xFF777777))),
               const SizedBox(height: 6),
-              TextField(
-                controller: _amountController,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500, color: Color(0xFF2D2D2B)),
-                decoration: InputDecoration(
-                  hintText: '0.00',
-                  suffixText: '₺',
-                  suffixStyle: const TextStyle(color: Color(0xFF4A8A58), fontWeight: FontWeight.w500),
-                  filled: true,
-                  fillColor: const Color(0xFFF2F4F0),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
+              Row(
+                children: [
+                  // currency dropdown
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE9F2EA),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFF4A8A58), width: 1),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: _selectedCurrency,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF2D4A35),
+                        ),
+                        icon: const Icon(Icons.keyboard_arrow_down, size: 16, color: Color(0xFF4A8A58)),
+                        items: ['TRY', 'EUR', 'RON', 'USD', 'GBP', 'CZK', 'HUF', 'PLN']
+                            .map((c) => DropdownMenuItem(
+                                  value: c,
+                                  child: Text('${_symbol(c)} $c'),
+                                ))
+                            .toList(),
+                        onChanged: (val) => setState(() => _selectedCurrency = val!),
+                      ),
+                    ),
                   ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFF4A8A58), width: 1.5),
+                  const SizedBox(width: 8),
+                  // amount text field
+                  Expanded(
+                    child: TextField(
+                      controller: _amountController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF2D2D2B),
+                      ),
+                      decoration: InputDecoration(
+                        hintText: '0.00',
+                        filled: true,
+                        fillColor: const Color(0xFFF2F4F0),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: Color(0xFF4A8A58), width: 1.5),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
               const SizedBox(height: 16),
 
-              // description field
               const Text('Description', style: TextStyle(fontSize: 13, color: Color(0xFF777777))),
               const SizedBox(height: 6),
               TextField(
@@ -182,7 +243,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               ),
               const SizedBox(height: 16),
 
-              // category selector
               const Text('Category', style: TextStyle(fontSize: 13, color: Color(0xFF777777))),
               const SizedBox(height: 8),
               Wrap(
@@ -227,7 +287,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               ),
               const SizedBox(height: 16),
 
-              // date picker
               const Text('Date', style: TextStyle(fontSize: 13, color: Color(0xFF777777))),
               const SizedBox(height: 6),
               GestureDetector(
@@ -253,7 +312,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               ),
               const SizedBox(height: 32),
 
-              // save button
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
