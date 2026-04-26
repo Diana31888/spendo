@@ -1,8 +1,9 @@
 // Home Screen - shows monthly summary and recent expenses
-// this is the first thing the user sees when opening the app
+// budget is loaded from SharedPreferences (set in Settings screen)
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../database/db_helper.dart';
 import '../models/expense.dart';
 
@@ -16,16 +17,21 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   List<Expense> _expenses = [];
   double _monthlyTotal = 0;
-  double _budget = 8000; // default budget in TRY
+  double _budget = 8000;
+  String _userName = '';
 
   @override
   void initState() {
     super.initState();
-    _loadExpenses();
+    _loadData();
   }
 
-  // load expenses from database every time screen appears
-  Future<void> _loadExpenses() async {
+  // load both expenses and user settings from storage
+  Future<void> _loadData() async {
+    final prefs = await SharedPreferences.getInstance();
+    final budget = prefs.getDouble('monthly_budget') ?? 8000;
+    final name = prefs.getString('user_name') ?? '';
+
     final yearMonth = DateFormat('yyyy-MM').format(DateTime.now());
     final monthly = await DBHelper.instance.getMonthlyExpenses(yearMonth);
     final all = await DBHelper.instance.getAllExpenses();
@@ -36,18 +42,18 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     setState(() {
-      _expenses = all.take(10).toList(); // show last 10 expenses
+      _expenses = all.take(10).toList();
       _monthlyTotal = total;
+      _budget = budget;
+      _userName = name;
     });
   }
 
-  // delete expense and refresh the list
   Future<void> _deleteExpense(int id) async {
     await DBHelper.instance.deleteExpense(id);
-    _loadExpenses();
+    _loadData();
   }
 
-  // pick an icon based on category name
   IconData _categoryIcon(String category) {
     switch (category.toLowerCase()) {
       case 'food': return Icons.restaurant_outlined;
@@ -59,7 +65,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // pick a soft background color for each category icon
   Color _categoryColor(String category) {
     switch (category.toLowerCase()) {
       case 'food': return const Color(0xFFFEF6E4);
@@ -80,28 +85,41 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: const Color(0xFFFAFAF8),
       body: SafeArea(
         child: RefreshIndicator(
-          // pull down to refresh the expense list
-          onRefresh: _loadExpenses,
+          onRefresh: _loadData,
           color: const Color(0xFF4A8A58),
           child: CustomScrollView(
             slivers: [
-              // top app bar
               SliverAppBar(
                 backgroundColor: const Color(0xFFFAFAF8),
                 floating: true,
-                title: const Text(
-                  'spendo',
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF2D4A35),
-                    letterSpacing: -0.5,
-                  ),
+                title: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // show greeting with name if set in settings
+                    if (_userName.isNotEmpty)
+                      Text(
+                        'Hi, $_userName 👋',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF888888),
+                          fontWeight: FontWeight.normal,
+                        ),
+                      ),
+                    const Text(
+                      'spendo',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF2D4A35),
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                  ],
                 ),
                 actions: [
                   IconButton(
                     icon: const Icon(Icons.refresh, color: Color(0xFF4A8A58)),
-                    onPressed: _loadExpenses,
+                    onPressed: _loadData,
                   ),
                 ],
               ),
@@ -146,7 +164,6 @@ class _HomeScreenState extends State<HomeScreen> {
                             ],
                           ),
                           const SizedBox(height: 10),
-                          // budget progress bar
                           ClipRRect(
                             borderRadius: BorderRadius.circular(4),
                             child: LinearProgressIndicator(
@@ -186,7 +203,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
                     const SizedBox(height: 24),
 
-                    // recent expenses label
                     const Text(
                       'RECENT',
                       style: TextStyle(
@@ -198,7 +214,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(height: 10),
 
-                    // expense list or empty state
                     if (_expenses.isEmpty)
                       Center(
                         child: Padding(
@@ -218,7 +233,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       )
                     else
                       ...(_expenses.map((expense) => Dismissible(
-                        // swipe left to delete
+                        // swipe left to delete expense
                         key: Key(expense.id.toString()),
                         direction: DismissDirection.endToStart,
                         background: Container(
@@ -241,7 +256,6 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                           child: Row(
                             children: [
-                              // category icon circle
                               Container(
                                 width: 38,
                                 height: 38,
@@ -256,7 +270,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
                               ),
                               const SizedBox(width: 12),
-                              // title and date
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -276,13 +289,12 @@ class _HomeScreenState extends State<HomeScreen> {
                                   ],
                                 ),
                               ),
-                              // amount
                               Text(
                                 '-₺${NumberFormat('#,##0.00').format(expense.amount)}',
                                 style: const TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
-                                  color: Color(0xFFC0392B),
+                                  color: Color(0xFF4A8A58),
                                 ),
                               ),
                             ],
